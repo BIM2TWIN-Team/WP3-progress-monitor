@@ -1,4 +1,4 @@
-# BIM2TWiN WP3 Progress Monitoring
+# BIM2TWNN WP3 Progress Monitoring
 
 This repo consist of scripts to create as-performed nodes like `action`, `operation` and `construction` in BIM2TWIN DTP
 and perform progress monitering at activity level.
@@ -10,7 +10,7 @@ nodes as new data scans are introduced to the DTP. The result of this script wil
 monitering.
 
 ```shell
-python3 DTP/integration/executer.py --xmlfile /path/to/DTP_config.xml --create_asperf
+python3 create_asperformed.py --log_dir path/to/session_log/dir
 ```
 
 The above script ignores nodes if the node already exist in the graph. But you have an option to force update node
@@ -27,5 +27,5 @@ with `--force_update_asperf`. If this flag is set, nodes will be updated even if
 This script run progress monitering at activity level with DTP.
 
 ```shell
-python3 DTP/integration/executer.py --xmlfile /path/to/DTP_config.xml --progress_monitor
+python3 progress_monitoring.py
 ```

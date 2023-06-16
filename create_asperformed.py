@@ -9,11 +9,11 @@ import os.path
 import shutil
 import time
 
-from DTP_API.helpers import logger_global, get_timestamp_dtp_format, convert_str_dtp_format_datetime
 from tqdm import tqdm
 
 from DTP_API.DTP_API import DTPApi
 from DTP_API.DTP_config import DTPConfig
+from DTP_API.helpers import logger_global, get_timestamp_dtp_format, convert_str_dtp_format_datetime
 
 
 class CreateAsPerformed:
@@ -321,8 +321,6 @@ class CreateAsPerformed:
                 'operation': len(self.created_nodes_iri['operation']),
                 'construction': len(self.created_nodes_iri['construction'])}
 
-
-# Below code snippet for testing only
 
 def parse_args():
     """
