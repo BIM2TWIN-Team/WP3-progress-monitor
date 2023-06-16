@@ -31,6 +31,20 @@ def activity_status(time_list):
 
 
 def get_num_days(each_activity_tracker, computed_status):
+    """
+    Get number of days an activity is behind/ahead
+
+    Parameters
+    ----------
+    each_activity_tracker: dict, obligatory
+        Dictionary that stores the status and number of days each task is ahead/behind
+    computed_status: str, obligatory
+        Status of the activity
+    Returns
+    -------
+    int
+        Number of days an activity is behind/ahead
+    """
     num_days_list = []
     for idx, status in enumerate(each_activity_tracker['status']):
         if status == computed_status:
@@ -93,7 +107,7 @@ class ProgressMonitor:
         self.DTP_CONFIG = dtp_config
         self.DTP_API = dtp_api
 
-    def get_progress_from_as_performed_node(self, node):
+    def __get_progress_from_as_performed_node(self, node):
         """
         Get progress of each as-performed node
 
@@ -108,7 +122,7 @@ class ProgressMonitor:
         """
         return node['items'][0][self.DTP_CONFIG.get_ontology_uri('progress')]
 
-    def get_time(self, node, as_planned):
+    def __get_time(self, node, as_planned):
         """
         Get start and end time of a node
 
@@ -129,7 +143,7 @@ class ProgressMonitor:
         end_time = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'End')]
         return datetime.fromisoformat(start_time), datetime.fromisoformat(end_time)
 
-    def get_as_performed_op_node(self, as_planned_node):
+    def __get_as_performed_op_node(self, as_planned_node):
         """
         Get as-performed operation node from as-planned node
 
@@ -144,9 +158,9 @@ class ProgressMonitor:
         """
         return self.DTP_API.fetch_asperformed_connected_asdesigned_oper_nodes(as_planned_node['_iri'])
 
-    def get_as_performed_element(self, as_planned_node):
+    def __get_as_performed_element(self, as_planned_node):
         """
-        Get as-performed operation node from as-planned node
+        Get as-performed element node from as-planned node
 
         Parameters
         ----------
@@ -183,10 +197,10 @@ class ProgressMonitor:
         print("Started progress monitering...")
         for each_activity in tqdm(activities['items']):
             activity_tracker[each_activity['_iri']] = {'complete': [], 'status': [], 'days': []}
-            operation = self.get_as_performed_op_node(each_activity)['items'][0]
+            operation = self.__get_as_performed_op_node(each_activity)['items'][0]
 
-            activity_start_time, activity_end_time = self.get_time(each_activity, as_planned=True)
-            operation_start_time, operation_end_time = self.get_time(operation, as_planned=False)
+            activity_start_time, activity_end_time = self.__get_time(each_activity, as_planned=True)
+            operation_start_time, operation_end_time = self.__get_time(operation, as_planned=False)
 
             if not operation['size']:  # if as-planned node doesn't have an as-performed node
                 activity_tracker[each_activity['_iri']]['complete'].append(0)
@@ -202,11 +216,11 @@ class ProgressMonitor:
                                                  each_activity['_iri'])
             for each_task in tasks['items']:
                 as_planned_element = self.DTP_API.fetch_elements_connected_task_nodes(each_task['_iri'])
-                as_performed_element = self.get_as_performed_element(as_planned_element)
+                as_performed_element = self.__get_as_performed_element(as_planned_element)
                 if not as_performed_element['size']:  # if as-planned node doesn't have an as-performed node
                     continue
 
-                as_performed_status = self.get_progress_from_as_performed_node(as_performed_element)
+                as_performed_status = self.__get_progress_from_as_performed_node(as_performed_element)
                 # activity_start_time, activity_end_time = self.get_time(each_activity, as_planned=True)
                 # operation_start_time, operation_end_time = self.get_time(operation, as_planned=False)
 

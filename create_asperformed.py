@@ -332,7 +332,6 @@ def parse_args():
     parser.add_argument('--force_update_asperf', default=False, action='store_true',
                         help='if set, nodes will be force to update even if its already exist')
     parser.add_argument('--log_dir', type=str, help='path to log dir', required=True)
-    parser.add_argument('--revert', '-r', type=str, help='path to session log file')
 
     return parser.parse_args()
 
@@ -342,22 +341,17 @@ if __name__ == "__main__":
     dtp_config = DTPConfig(args.xml_path)
     dtp_api = DTPApi(dtp_config, simulation_mode=args.simulation)
 
-    if args.revert:
-        print(f'Reverting session from {args.revert}')
-        dtp_api.revert_last_session(args.revert)
-        print(f'Session Reverted.')
-    else:
-        # force update node
-        if args.force_update_asperf:
-            assert args.log_dir, "Please set log dir with --log_dir"
+    # force update node
+    if args.force_update_asperf:
+        assert args.log_dir, "Please set log dir with --log_dir"
 
-        # logger
-        if not os.path.exists(args.log_dir):
-            os.makedirs(args.log_dir)
-        log_path = os.path.join(args.log_dir, f"db_session-{time.strftime('%Y%m%d-%H%M%S')}.log")
-        dtp_api.init_logger(log_path)
+    # logger
+    if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
+    log_path = os.path.join(args.log_dir, f"db_session-{time.strftime('%Y%m%d-%H%M%S')}.log")
+    dtp_api.init_logger(log_path)
 
-        as_performed = CreateAsPerformed(dtp_config, dtp_api, args.force_update_asperf, args.log_dir)
-        count_created_nodes = as_performed.create_as_performed_nodes()
-        print(f"Created {count_created_nodes['construction']} construction, {count_created_nodes['operation']} "
-              f"operation and {count_created_nodes['action']} action nodes.")
+    as_performed = CreateAsPerformed(dtp_config, dtp_api, args.force_update_asperf, args.log_dir)
+    count_created_nodes = as_performed.create_as_performed_nodes()
+    print(f"Created {count_created_nodes['construction']} construction, {count_created_nodes['operation']} "
+          f"operation and {count_created_nodes['action']} action nodes.")
