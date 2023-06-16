@@ -22,7 +22,7 @@ with `--force_update_asperf`. If this flag is set, nodes will be updated even if
 
 ## Progress monitor
 
-![B2T progress monitor](assets/porgress.jpg)
+![B2T progress monitor](assets/progress.jpg)
 
 This script run progress monitering at activity level with DTP.
 
