@@ -3,6 +3,8 @@
 This repo consist of scripts to create as-performed nodes like `action`, `operation` and `construction` in BIM2TWIN DTP
 and perform progress monitering at activity level.
 
+Set your `DEV_TOKEN`, `DTP_DOMAIN` and `LOG_DIR` in `DTP_API/DTP_config.xml`
+
 ## Create as-performed node
 
 The script will create as-performed nodes except as-performed elements. This script need to be run to create or update
@@ -10,7 +12,7 @@ nodes as new data scans are introduced to the DTP. The result of this script wil
 monitering.
 
 ```shell
-python3 create_asperformed.py --log_dir path/to/session_log/dir
+python3 create_asperformed.py
 ```
 
 The above script ignores nodes if the node already exist in the graph. But you have an option to force update node

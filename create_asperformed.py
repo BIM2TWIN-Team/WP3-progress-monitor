@@ -35,7 +35,7 @@ class CreateAsPerformed:
         dict, number of action, operation, and construction nodes created
     """
 
-    def __init__(self, dtp_config, dtp_api, force_update=False, log_path=None):
+    def __init__(self, dtp_config, dtp_api, force_update=False):
         """
         Parameters
         ----------
@@ -49,12 +49,6 @@ class CreateAsPerformed:
         self.force_update = force_update
         self.as_planned_dict = dict()
         self.created_nodes_iri = {'action': set(), 'operation': set(), 'construction': set()}
-
-        if force_update:
-            self.tmp_path = os.path.join(log_path, 'log_nodes')
-            if os.path.exists(self.tmp_path):
-                shutil.rmtree(self.tmp_path)
-            os.makedirs(self.tmp_path)
 
     def __get_all_work_packages(self):
         """
@@ -355,7 +349,6 @@ def parse_args():
     parser.add_argument('--simulation', '-s', default=False, action='store_true')
     parser.add_argument('--force_update_asperf', default=False, action='store_true',
                         help='if set, nodes will be force to update even if its already exist')
-    parser.add_argument('--log_dir', type=str, help='path to log dir', required=True)
 
     return parser.parse_args()
 
@@ -364,18 +357,7 @@ if __name__ == "__main__":
     args = parse_args()
     dtp_config = DTPConfig(args.xml_path)
     dtp_api = DTPApi(dtp_config, simulation_mode=args.simulation)
-
-    # force update node
-    if args.force_update_asperf:
-        assert args.log_dir, "Please set log dir with --log_dir"
-
-    # logger
-    if not os.path.exists(args.log_dir):
-        os.makedirs(args.log_dir)
-    log_path = os.path.join(args.log_dir, f"db_session-{time.strftime('%Y%m%d-%H%M%S')}.log")
-    dtp_api.init_logger(log_path)
-
-    as_performed = CreateAsPerformed(dtp_config, dtp_api, args.force_update_asperf, args.log_dir)
+    as_performed = CreateAsPerformed(dtp_config, dtp_api, args.force_update_asperf)
     count_created_nodes = as_performed.create_as_performed_nodes()
     print(f"Created {count_created_nodes['construction']} construction, {count_created_nodes['operation']} "
           f"operation and {count_created_nodes['action']} action nodes.")
