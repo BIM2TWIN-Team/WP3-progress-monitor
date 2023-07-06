@@ -137,7 +137,6 @@ class ProgressMonitor:
         tuple
             Start and end date of the node
         """
-        print(node, as_planned)
         uri_str = 'planned' if as_planned else 'process'
         start_time = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'Start')]
         end_time = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'End')]
@@ -221,9 +220,6 @@ class ProgressMonitor:
                     continue
 
                 as_performed_status = self.__get_progress_from_as_performed_node(as_performed_element)
-                # activity_start_time, activity_end_time = self.get_time(each_activity, as_planned=True)
-                # operation_start_time, operation_end_time = self.get_time(operation, as_planned=False)
-
                 time_status, days, task_complete_flag = check_schedule(activity_start_time, activity_end_time,
                                                                        operation_start_time, operation_end_time,
                                                                        as_performed_status)
@@ -235,7 +231,6 @@ class ProgressMonitor:
             if num_complete_task:
                 computed_complete = sum(activity_tracker[each_activity['_iri']]['complete']) / num_complete_task * 100
                 computed_status = activity_status(activity_tracker[each_activity['_iri']]['status'])
-                # computed_num_days = max(activity_tracker[each_activity['_iri']]['days'])
                 computed_num_days = get_num_days(activity_tracker[each_activity['_iri']], computed_status)
                 progress_at_activity[each_activity['_iri']] = {'complete': computed_complete,
                                                                'status': computed_status,

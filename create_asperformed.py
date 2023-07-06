@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from DTP_API.DTP_API import DTPApi
 from DTP_API.DTP_config import DTPConfig
-from DTP_API.helpers import logger_global, get_timestamp_dtp_format, convert_str_dtp_format_datetime
+from DTP_API.helpers import logger_global, get_timestamp_dtp_format, convert_str_dtp_format_datetime, create_as_performed_iri
 
 
 class CreateAsPerformed:
@@ -142,6 +142,22 @@ class CreateAsPerformed:
         return False if node_iri in self.created_nodes_iri[node_type] or self.DTP_API.check_if_exist(
             node_iri) else True
 
+    def __check_op_complete(self, actions_completed):
+        """
+        Check if the operation is complete
+
+        Parameters
+        ----------
+        actions_completed: list
+            Indicating each action in operation is completed or not
+
+        Returns
+        -------
+        bool
+            True if operation is completed else False
+        """
+        return True if sum(actions_completed) / len(actions_completed) == 1 else False
+
     def __create_action(self, task_dict, as_build_element_iri, process_end):
         """
         Create as-performed action node
@@ -160,7 +176,7 @@ class CreateAsPerformed:
         str
             return iri of the newly created action node
         """
-        action_iri = task_dict['_iri'].replace('task', 'action')
+        action_iri = create_as_performed_iri(task_dict['_iri'])
         if not self.__need_to_create_node(node_type='action', node_iri=action_iri):
             return action_iri, False
 
@@ -176,7 +192,7 @@ class CreateAsPerformed:
         else:
             raise Exception(f"Error creating action node {action_iri}")
 
-    def __create_operation(self, activity, list_of_action_iri, process_end):
+    def __create_operation(self, activity, list_of_action_iri, last_updated, process_end):
         """
         Create as-performed operation node
 
@@ -186,6 +202,8 @@ class CreateAsPerformed:
             mirror activity node of operation
         list_of_action_iri:
             list of action node connected to this operation node
+        last_updated:
+            Last updated date
         process_end:
             End date of operation
 
@@ -194,23 +212,20 @@ class CreateAsPerformed:
         str
             return iri of the newly created operation node
         """
-        operation_iri = activity['_iri'].replace('activity', 'operation')
+        operation_iri = create_as_performed_iri(activity['_iri'])
         if not self.__need_to_create_node(node_type='operation', node_iri=operation_iri, force=True):
             return operation_iri, False
 
-        # TODO: Process start should be start of the project or end data of last scan, updateDate should be date of
-        #  the latest data accusation and processEnd should be the end of operation. For now, processEnd hold the date
-        #  of latest data accusation (as updateDate is not in ontology yet).
         task_type = activity[self.DTP_CONFIG.get_ontology_uri('hasTaskType')]
         process_start = activity[self.DTP_CONFIG.get_ontology_uri('plannedStart')]
 
         if not self.force_update:
             create_res = self.DTP_API.create_operation_node(task_type, operation_iri, activity['_iri'],
                                                             list_of_action_iri,
-                                                            process_start, process_end)
+                                                            process_start, last_updated, process_end)
         else:
-            create_res = self.DTP_API.update_operation_node(operation_iri, list_of_action_iri,
-                                                            process_start, process_end, self.tmp_path)
+            create_res = self.DTP_API.update_operation_node(operation_iri, list_of_action_iri, process_start,
+                                                            last_updated, process_end)
 
         if create_res:
             return operation_iri, True
@@ -233,7 +248,7 @@ class CreateAsPerformed:
         str
             return iri of the newly created construction node
         """
-        constr_iri = work_package['_iri'].replace('workpackage', 'construction')
+        constr_iri = create_as_performed_iri(work_package['_iri'])
         if not self.__need_to_create_node(node_type='construction', node_iri=constr_iri, force=True):
             return constr_iri, False
 
@@ -242,7 +257,7 @@ class CreateAsPerformed:
             query_res = self.DTP_API.create_construction_node(production_method_type, constr_iri, work_package['_iri'],
                                                               list_of_operation_iri)
         else:
-            query_res = self.DTP_API.update_construction_node(constr_iri, list_of_operation_iri, self.tmp_path)
+            query_res = self.DTP_API.update_construction_node(constr_iri, list_of_operation_iri)
 
         if query_res:
             return constr_iri, True
@@ -262,9 +277,12 @@ class CreateAsPerformed:
         print("Started creating as-performed nodes in DTP...")
         for each_wp in tqdm(self.as_planned_dict['work_package']):
             concerned_operation_iris = set()
-            operation_action_end_time = None
+            operation_end_time = None
+            operation_last_updated = None
+            assert len(each_wp['activity']), "No activity nodes found in this domain!"
             for each_activity in each_wp['activity']:
                 concerned_action_iris = set()
+                action_list = []
                 for each_task in each_activity['task']:
                     # each task will always have only one element as target
                     element_of_task = each_task['element'][0]
@@ -284,28 +302,34 @@ class CreateAsPerformed:
                     as_perf_node = as_perf_node_response['items'][0]
                     # if as-built has zero progress
                     if not as_perf_node[self.DTP_CONFIG.get_ontology_uri('progress')]:
+                        action_list.append(0)
                         continue
+                    else:
+                        action_list.append(1)
 
                     element_end_time = as_perf_node[self.DTP_CONFIG.get_ontology_uri('timeStamp')]
                     # end date for both operation and action will be same
-                    if not operation_action_end_time:  # if operation/action end date is not set
-                        operation_action_end_time = element_end_time
+                    if not operation_end_time:  # if operation/action end date is not set
+                        operation_last_updated = element_end_time
                     else:  # get the latest end date
-                        operation_action_end_time = get_timestamp_dtp_format(
-                            max(convert_str_dtp_format_datetime(operation_action_end_time),
+                        operation_last_updated = get_timestamp_dtp_format(
+                            max(convert_str_dtp_format_datetime(operation_last_updated),
                                 convert_str_dtp_format_datetime(element_end_time)))
 
                     # create corresponding action node
                     action_iri, action_created = self.__create_action(each_task, as_perf_node['_iri'],
-                                                                      operation_action_end_time)
+                                                                      element_end_time)
 
                     concerned_action_iris.add(action_iri)
                     if action_created:
                         self.created_nodes_iri['action'].add(action_iri)
 
+                operation_end_time = operation_last_updated if self.__check_op_complete(action_list) else None
+
                 # create corresponding operation node
                 operation_iri, operation_created = self.__create_operation(each_activity, concerned_action_iris,
-                                                                           operation_action_end_time)
+                                                                           operation_last_updated,
+                                                                           operation_end_time)
                 concerned_operation_iris.add(operation_iri)
                 if operation_created:
                     self.created_nodes_iri['operation'].add(operation_iri)
