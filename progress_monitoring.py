@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from DTP_API.DTP_API import DTPApi
 from DTP_API.DTP_config import DTPConfig
+from DTP_API.helpers import get_timestamp_dtp_format, convert_str_dtp_format_datetime
 
 
 def activity_status(time_list):
@@ -139,7 +140,20 @@ class ProgressMonitor:
         """
         uri_str = 'planned' if as_planned else 'process'
         start_time = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'Start')]
-        end_time = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'End')]
+        try:
+            if self.DTP_CONFIG.get_ontology_uri(uri_str + 'End') in node \
+                    and self.DTP_CONFIG.get_ontology_uri('lastUpdatedOn') in node:
+                end_time_op = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'End')]
+                last_update = node[self.DTP_CONFIG.get_ontology_uri('lastUpdatedOn')]
+                end_time = get_timestamp_dtp_format(
+                    max(convert_str_dtp_format_datetime(end_time_op),
+                        convert_str_dtp_format_datetime(last_update)))
+            elif self.DTP_CONFIG.get_ontology_uri(uri_str + 'End') in node:
+                end_time = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'End')]
+            else:
+                end_time = node[self.DTP_CONFIG.get_ontology_uri('lastUpdatedOn')]
+        except KeyError as err:
+            raise Exception(f"{err} for iri: {node['_iri']}")
         return datetime.fromisoformat(start_time), datetime.fromisoformat(end_time)
 
     def __get_as_performed_op_node(self, as_planned_node):
@@ -195,6 +209,8 @@ class ProgressMonitor:
 
         print("Started progress monitering...")
         for each_activity in tqdm(activities['items']):
+            if len(each_activity):  # No task nodes found
+                continue
             activity_tracker[each_activity['_iri']] = {'complete': [], 'status': [], 'days': []}
             operation = self.__get_as_performed_op_node(each_activity)['items'][0]
 
@@ -214,6 +230,8 @@ class ProgressMonitor:
             tasks = self.DTP_API.query_all_pages(self.DTP_API.fetch_activity_connected_task_nodes,
                                                  each_activity['_iri'])
             for each_task in tasks['items']:
+                if len(each_task):  # No element nodes found
+                    continue
                 as_planned_element = self.DTP_API.fetch_elements_connected_task_nodes(each_task['_iri'])
                 as_performed_element = self.__get_as_performed_element(as_planned_element)
                 if not as_performed_element['size']:  # if as-planned node doesn't have an as-performed node

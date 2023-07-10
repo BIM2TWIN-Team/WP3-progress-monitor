@@ -5,15 +5,13 @@
 # This file cannot be used without a written permission from the author(s).
 
 import argparse
-import os.path
-import shutil
-import time
 
 from tqdm import tqdm
 
 from DTP_API.DTP_API import DTPApi
 from DTP_API.DTP_config import DTPConfig
-from DTP_API.helpers import logger_global, get_timestamp_dtp_format, convert_str_dtp_format_datetime, create_as_performed_iri
+from DTP_API.helpers import logger_global, get_timestamp_dtp_format, convert_str_dtp_format_datetime, \
+    create_as_performed_iri
 
 
 class CreateAsPerformed:
@@ -54,39 +52,39 @@ class CreateAsPerformed:
         """
         Get all work package nodes as list of dicts to as_planned_dict
         """
-        print("Started querying all work packages from DTP...")
+        print("Started querying all work packages")
         all_work_package = self.DTP_API.query_all_pages(self.DTP_API.fetch_workpackage_nodes)
         self.as_planned_dict['work_package'] = all_work_package['items']
-        print("Finished querying all work packages from DTP.")
+        print("Finished querying all work packages.")
 
     def __get_activities_for_work_packages(self):
         """
         Get all activity nodes for each work package and add to work package dict with 'activity' key
         """
-        print("Started querying activities for each work packages from DTP...")
+        print("Started querying activities for each work packages")
         for each_wp in self.as_planned_dict['work_package']:
             activities = self.DTP_API.query_all_pages(self.DTP_API.fetch_workpackage_connected_activity_nodes,
                                                       each_wp['_iri'])
             each_wp['activity'] = activities['items']
-        print("Finished querying activities for each work packages from DTP.")
+        print("Finished querying activities for each work packages.")
 
     def __get_tasks_for_activities(self):
         """
         Get all task node for each activity and add to activity dict with 'task' key
         """
-        print("Started querying tasks for each activities from DTP...")
+        print("Started querying tasks for each activities")
         for each_wp in self.as_planned_dict['work_package']:
             for each_activity in each_wp['activity']:
                 tasks = self.DTP_API.query_all_pages(self.DTP_API.fetch_activity_connected_task_nodes,
                                                      each_activity['_iri'])
                 each_activity['task'] = tasks['items']
-        print("Finished querying tasks for each activities from DTP.")
+        print("Finished querying tasks for each activities.")
 
     def __get_element_for_tasks(self):
         """
         Get all as-planned element nodes for each task and add to task dict with 'elements' key
         """
-        print("Started querying element for each tasks from DTP...")
+        print("Started querying element for each tasks")
         for each_wp in tqdm(self.as_planned_dict['work_package']):
             for each_activity in each_wp['activity']:
                 for each_task in each_activity['task']:
@@ -94,7 +92,7 @@ class CreateAsPerformed:
                     element = self.DTP_API.query_all_pages(self.DTP_API.fetch_elements_connected_task_nodes,
                                                            each_task['_iri'])
                     each_task['element'] = element['items']
-        print("Finished querying element for each tasks from DTP.")
+        print("Finished querying element for each tasks.")
 
     def __get_all_as_planned_nodes(self):
         """
@@ -111,7 +109,7 @@ class CreateAsPerformed:
         self.__get_tasks_for_activities()
         self.__get_element_for_tasks()
 
-    def __need_to_create_node(self, node_type, node_iri, force=False):
+    def __need_to_create_node(self, node_type, node_iri):
         """
         Check if the node needs to be created or not
 
@@ -121,8 +119,6 @@ class CreateAsPerformed:
             Node type
         node_iri: str
             Node iri
-        force: bool
-            Need to check force update or not
 
         Returns
         -------
@@ -130,8 +126,8 @@ class CreateAsPerformed:
             return True if node need to be created else false
         """
         assert node_type in self.created_nodes_iri.keys(), f"Wrong node type '{node_type}'"
-        if self.force_update and force:
-            return False if node_iri in self.created_nodes_iri[node_type] else True
+        if self.force_update:
+            return True
 
         return False if node_iri in self.created_nodes_iri[node_type] or self.DTP_API.check_if_exist(
             node_iri) else True
@@ -150,7 +146,10 @@ class CreateAsPerformed:
         bool
             True if operation is completed else False
         """
-        return True if sum(actions_completed) / len(actions_completed) == 1 else False
+        if not len(actions_completed):
+            return False
+        else:
+            return True if sum(actions_completed) / len(actions_completed) == 1 else False
 
     def __create_action(self, task_dict, as_build_element_iri, process_end):
         """
@@ -178,8 +177,13 @@ class CreateAsPerformed:
         contractor = task_dict[self.DTP_CONFIG.get_ontology_uri('constructionContractor')]
         # TODO: Action start date should be same as that of operation node
         process_start = task_dict[self.DTP_CONFIG.get_ontology_uri('plannedStart')]
-        create_res = self.DTP_API.create_action_node(task_type, action_iri, task_dict['_iri'], as_build_element_iri,
-                                                     contractor, process_start, process_end)
+        node_exist = self.DTP_API.check_if_exist(action_iri)
+        if not node_exist:
+            create_res = self.DTP_API.create_action_node(task_type, action_iri, task_dict['_iri'], as_build_element_iri,
+                                                         contractor, process_start, process_end)
+        else:
+            create_res = self.DTP_API.update_action_node(task_type, action_iri, task_dict['_iri'], as_build_element_iri,
+                                                         contractor, process_start, process_end)
 
         if create_res:
             return action_iri, True
@@ -207,13 +211,13 @@ class CreateAsPerformed:
             return iri of the newly created operation node
         """
         operation_iri = create_as_performed_iri(activity['_iri'])
-        if not self.__need_to_create_node(node_type='operation', node_iri=operation_iri, force=True):
+        if not self.__need_to_create_node(node_type='operation', node_iri=operation_iri):
             return operation_iri, False
 
         task_type = activity[self.DTP_CONFIG.get_ontology_uri('hasTaskType')]
         process_start = activity[self.DTP_CONFIG.get_ontology_uri('plannedStart')]
 
-        if not self.force_update:
+        if self.DTP_API.check_if_exist(operation_iri):
             create_res = self.DTP_API.create_operation_node(task_type, operation_iri, activity['_iri'],
                                                             list_of_action_iri,
                                                             process_start, last_updated, process_end)
@@ -243,11 +247,11 @@ class CreateAsPerformed:
             return iri of the newly created construction node
         """
         constr_iri = create_as_performed_iri(work_package['_iri'])
-        if not self.__need_to_create_node(node_type='construction', node_iri=constr_iri, force=True):
+        if not self.__need_to_create_node(node_type='construction', node_iri=constr_iri):
             return constr_iri, False
 
         production_method_type = work_package[self.DTP_CONFIG.get_ontology_uri('hasProductionMethodType')]
-        if not self.force_update:
+        if self.DTP_API.check_if_exist(constr_iri):
             query_res = self.DTP_API.create_construction_node(production_method_type, constr_iri, work_package['_iri'],
                                                               list_of_operation_iri)
         else:
@@ -268,16 +272,20 @@ class CreateAsPerformed:
             return the number of create node at each level
         """
         self.__get_all_as_planned_nodes()
-        print("Started creating as-performed nodes in DTP...")
+        print("Started creating as-performed nodes")
         for each_wp in tqdm(self.as_planned_dict['work_package']):
+            if not each_wp:  # No activity nodes found
+                continue
             concerned_operation_iris = set()
-            operation_end_time = None
-            operation_last_updated = None
-            assert len(each_wp['activity']), "No activity nodes found in this domain!"
             for each_activity in each_wp['activity']:
+                if not each_activity:  # No task nodes found
+                    continue
                 concerned_action_iris = set()
                 action_list = []
+                operation_last_updated = None
                 for each_task in each_activity['task']:
+                    if not each_task:  # No element nodes found
+                        continue
                     # each task will always have only one element as target
                     element_of_task = each_task['element'][0]
 
@@ -303,13 +311,12 @@ class CreateAsPerformed:
 
                     element_end_time = as_perf_node[self.DTP_CONFIG.get_ontology_uri('timeStamp')]
                     # end date for both operation and action will be same
-                    if not operation_end_time:  # if operation/action end date is not set
+                    if not operation_last_updated:  # if operation/action end date is not set
                         operation_last_updated = element_end_time
                     else:  # get the latest end date
                         operation_last_updated = get_timestamp_dtp_format(
                             max(convert_str_dtp_format_datetime(operation_last_updated),
                                 convert_str_dtp_format_datetime(element_end_time)))
-
                     # create corresponding action node
                     action_iri, action_created = self.__create_action(each_task, as_perf_node['_iri'],
                                                                       element_end_time)
@@ -318,20 +325,23 @@ class CreateAsPerformed:
                     if action_created:
                         self.created_nodes_iri['action'].add(action_iri)
 
-                operation_end_time = operation_last_updated if self.__check_op_complete(action_list) else None
-
                 # create corresponding operation node
-                operation_iri, operation_created = self.__create_operation(each_activity, concerned_action_iris,
-                                                                           operation_last_updated,
-                                                                           operation_end_time)
-                concerned_operation_iris.add(operation_iri)
-                if operation_created:
-                    self.created_nodes_iri['operation'].add(operation_iri)
+                if len(each_activity):  # if None, no activity nodes
+                    # set end date if operation is complete
+                    operation_end_time = operation_last_updated if self.__check_op_complete(action_list) else None
+
+                    operation_iri, operation_created = self.__create_operation(each_activity, concerned_action_iris,
+                                                                               operation_last_updated,
+                                                                               operation_end_time)
+                    concerned_operation_iris.add(operation_iri)
+                    if operation_created:
+                        self.created_nodes_iri['operation'].add(operation_iri)
 
             # create corresponding construction node
-            construction_iri, construction_created = self.__create_construction(each_wp, concerned_operation_iris)
-            if construction_created:
-                self.created_nodes_iri['operation'].add(construction_iri)
+            if len(each_wp):  # if None, no work package nodes
+                construction_iri, construction_created = self.__create_construction(each_wp, concerned_operation_iris)
+                if construction_created:
+                    self.created_nodes_iri['operation'].add(construction_iri)
 
         print("Finished creating as-performed in DTP.")
 
