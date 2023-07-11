@@ -74,7 +74,7 @@ def check_schedule(activity_start_time, activity_end_time, operation_start_time,
     Returns
     -------
     tuple
-        Progress status [ahead, behind, on], number of days ahead/behind, completed-1 or 0-not complete
+        Progress status [ahead, behind, on], number of days ahead/behind (-1 if not started), if completed 1 else 0
     """
     if activity_progress == 100:
         if activity_end_time > operation_end_time:
@@ -208,7 +208,7 @@ class ProgressMonitor:
                                                          convert_str_dtp_format_datetime(last_updated)))
         return datetime.fromisoformat(scan_date)
 
-    def compute_progress(self, activity_tracker, activity_iri):
+    def compute_progress(self, activity_tracker, activity_iri, progress_at_activity):
         """
         Compute progress of each activity
 
@@ -218,17 +218,19 @@ class ProgressMonitor:
             Store progress info of each activity
         activity_iri: str
             IRI of activity node
+        progress_at_activity: dict
+            Dictionary to store progress
         """
         num_complete_task = len(activity_tracker[activity_iri]['complete'])
         if num_complete_task:
             computed_complete = sum(activity_tracker[activity_iri]['complete']) / num_complete_task * 100
             computed_status = activity_status(activity_tracker[activity_iri]['status'])
             computed_num_days = get_num_days(activity_tracker[activity_iri], computed_status)
-            self.progress_at_activity[activity_iri] = {'complete': computed_complete,
-                                                       'status': computed_status,
-                                                       'days': computed_num_days}
-        else:  # if activity node with no corresponding action nodes
-            self.progress_at_activity[activity_iri] = {'complete': 0.0, 'status': 'behind', 'days': -1}
+            progress_at_activity[activity_iri] = {'complete': computed_complete,
+                                                  'status': computed_status,
+                                                  'days': computed_num_days}
+        else:  # none of the actions are complete
+            progress_at_activity[activity_iri] = {'complete': 0.0, 'status': 'behind', 'days': -1}
 
     def compute_progress_at_activity(self, activities=None):
         """
@@ -249,6 +251,7 @@ class ProgressMonitor:
             activities = self.DTP_API.query_all_pages(self.DTP_API.fetch_activity_nodes)
             print("Completed fetching all activity nodes from DTP.")
         activity_tracker = dict()
+        progress_at_activity = dict()
         latest_scan_date = self.__get_scan_date()
 
         print("Started progress monitering...")
@@ -265,7 +268,7 @@ class ProgressMonitor:
                     activity_tracker[each_activity['_iri']]['status'].append('behind')
                 else:
                     activity_tracker[each_activity['_iri']]['status'].append('on')
-                self.compute_progress(activity_tracker, each_activity['_iri'])
+                self.compute_progress(activity_tracker, each_activity['_iri'], progress_at_activity)
                 continue
 
             operation = operation_resp['items'][0]
@@ -287,9 +290,9 @@ class ProgressMonitor:
                 activity_tracker[each_activity['_iri']]['days'].append(days)
                 activity_tracker[each_activity['_iri']]['status'].append(time_status)
 
-            self.compute_progress(activity_tracker, each_activity['_iri'])
+            self.compute_progress(activity_tracker, each_activity['_iri'], progress_at_activity)
 
-        return self.progress_at_activity
+        return progress_at_activity
 
 
 def parse_args():
@@ -309,6 +312,5 @@ if __name__ == "__main__":
     dtp_api = DTPApi(dtp_config, simulation_mode=args.simulation)
     progress_monitor = ProgressMonitor(dtp_config, dtp_api)
     progress_dict = progress_monitor.compute_progress_at_activity()
-    print(len(progress_dict))
     for activity_iri, progress in progress_dict.items():
         print(activity_iri, progress)
