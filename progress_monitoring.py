@@ -209,15 +209,17 @@ class ProgressMonitor:
 
         print("Started progress monitering...")
         for each_activity in tqdm(activities['items']):
-            if len(each_activity):  # No task nodes found
-                continue
             activity_tracker[each_activity['_iri']] = {'complete': [], 'status': [], 'days': []}
-            operation = self.__get_as_performed_op_node(each_activity)['items'][0]
+            operation_resp = self.__get_as_performed_op_node(each_activity)
+            if operation_resp['size']:
+                operation = operation_resp['items'][0]
+            else:
+                continue
 
             activity_start_time, activity_end_time = self.__get_time(each_activity, as_planned=True)
             operation_start_time, operation_end_time = self.__get_time(operation, as_planned=False)
 
-            if not operation['size']:  # if as-planned node doesn't have an as-performed node
+            if not operation_resp['size']:  # if as-planned node doesn't have an as-performed node
                 activity_tracker[each_activity['_iri']]['complete'].append(0)
                 activity_tracker[each_activity['_iri']]['days'].append(-1)  # -1 for not started
                 if activity_start_time < operation_start_time:
@@ -230,8 +232,6 @@ class ProgressMonitor:
             tasks = self.DTP_API.query_all_pages(self.DTP_API.fetch_activity_connected_task_nodes,
                                                  each_activity['_iri'])
             for each_task in tasks['items']:
-                if len(each_task):  # No element nodes found
-                    continue
                 as_planned_element = self.DTP_API.fetch_elements_connected_task_nodes(each_task['_iri'])
                 as_performed_element = self.__get_as_performed_element(as_planned_element)
                 if not as_performed_element['size']:  # if as-planned node doesn't have an as-performed node

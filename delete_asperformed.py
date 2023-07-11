@@ -83,9 +83,9 @@ if __name__ == "__main__":
     delete_as_performed = DeleteAsPerformed(dtp_config, dtp_api)
     if args.target_level in ['construction', 'all']:
         delete_as_performed.delete_asperf_nodes('construction')
-    elif args.target_level in ['operation', 'all']:
+    if args.target_level in ['operation', 'all']:
         delete_as_performed.delete_asperf_nodes('operation')
-    elif args.target_level in ['action', 'all']:
+    if args.target_level in ['action', 'all']:
         delete_as_performed.delete_asperf_nodes('action')
 
     print(f"Deleted "
