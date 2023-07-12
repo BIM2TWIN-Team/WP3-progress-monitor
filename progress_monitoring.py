@@ -262,12 +262,14 @@ class ProgressMonitor:
 
             if not operation_resp['size']:  # if activity node doesn't have an operation node
                 activity_tracker[each_activity['_iri']]['complete'].append(0)
-                activity_tracker[each_activity['_iri']]['days'].append(-1)  # -1 for not started
                 if activity_start_time < latest_scan_date:
                     # if operation needed to be started but not started yet
                     activity_tracker[each_activity['_iri']]['status'].append('behind')
+                    day_diff = (latest_scan_date - activity_start_time).days
                 else:
                     activity_tracker[each_activity['_iri']]['status'].append('on')
+                    day_diff = (activity_start_time - latest_scan_date).days
+                activity_tracker[each_activity['_iri']]['days'].append(day_diff)
                 self.compute_progress(activity_tracker, each_activity['_iri'], progress_at_activity)
                 continue
 
