@@ -142,15 +142,15 @@ class ProgressMonitor:
         uri_str = 'planned' if as_planned else 'process'
         start_time = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'Start')]
         try:
-            if self.DTP_CONFIG.get_ontology_uri(uri_str + 'End') in node \
+            if self.DTP_CONFIG.get_ontology_uri(uri_str + 'End') in node:
+                end_time = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'End')]
+            elif self.DTP_CONFIG.get_ontology_uri(uri_str + 'End') in node \
                     and self.DTP_CONFIG.get_ontology_uri('lastUpdatedOn') in node:
                 end_time_op = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'End')]
                 last_update = node[self.DTP_CONFIG.get_ontology_uri('lastUpdatedOn')]
                 end_time = get_timestamp_dtp_format(
                     max(convert_str_dtp_format_datetime(end_time_op),
                         convert_str_dtp_format_datetime(last_update)))
-            elif self.DTP_CONFIG.get_ontology_uri(uri_str + 'End') in node:
-                end_time = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'End')]
             else:
                 end_time = node[self.DTP_CONFIG.get_ontology_uri('lastUpdatedOn')]
         except KeyError as err:

@@ -193,7 +193,8 @@ class CreateAsPerformed:
         else:
             raise Exception(f"Error creating action node {action_iri}")
 
-    def __create_operation(self, activity, list_of_action_iri=None, last_updated=None, process_end=None):
+    def __create_operation(self, activity, list_of_action_iri=None, process_start=None, last_updated=None,
+                           process_end=None):
         """
         Create as-performed operation node
 
@@ -219,7 +220,10 @@ class CreateAsPerformed:
 
         task_type = activity[self.DTP_CONFIG.get_ontology_uri('hasTaskType')]
         # TODO: Operation start date should be the project start date or previous scan date
-        process_start = activity[self.DTP_CONFIG.get_ontology_uri('plannedStart')]
+        if not process_start:
+            process_start = activity[self.DTP_CONFIG.get_ontology_uri('plannedStart')]
+        if convert_str_dtp_format_datetime(last_updated) < convert_str_dtp_format_datetime(process_start):
+            last_updated = process_start
 
         if not self.DTP_API.check_if_exist(operation_iri):
             create_res = self.DTP_API.create_operation_node(task_type, operation_iri, activity['_iri'],
@@ -337,6 +341,7 @@ class CreateAsPerformed:
                     operation_end_time = operation_last_updated if self.__check_op_complete(action_list) else None
 
                     operation_iri, operation_created = self.__create_operation(each_activity, concerned_action_iris,
+                                                                               None,  # operation start date
                                                                                operation_last_updated,
                                                                                operation_end_time)
                     concerned_operation_iris.add(operation_iri)
