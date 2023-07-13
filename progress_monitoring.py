@@ -124,7 +124,7 @@ class ProgressMonitor:
         """
         return node['items'][0][self.DTP_CONFIG.get_ontology_uri('progress')]
 
-    def __get_time(self, node, as_planned):
+    def get_time(self, node, as_planned):
         """
         Get start and end time of a node
 
@@ -258,7 +258,7 @@ class ProgressMonitor:
         for each_activity in tqdm(activities['items']):
             activity_tracker[each_activity['_iri']] = {'complete': [], 'status': [], 'days': []}
             operation_resp = self.__get_as_performed_op_node(each_activity)
-            activity_start_time, activity_end_time = self.__get_time(each_activity, as_planned=True)
+            activity_start_time, activity_end_time = self.get_time(each_activity, as_planned=True)
 
             if not operation_resp['size']:  # if activity node doesn't have an operation node
                 activity_tracker[each_activity['_iri']]['complete'].append(0)
@@ -274,7 +274,7 @@ class ProgressMonitor:
                 continue
 
             operation = operation_resp['items'][0]
-            operation_start_time, operation_end_time = self.__get_time(operation, as_planned=False)
+            operation_start_time, operation_end_time = self.get_time(operation, as_planned=False)
 
             tasks = self.DTP_API.query_all_pages(self.DTP_API.fetch_activity_connected_task_nodes,
                                                  each_activity['_iri'])
