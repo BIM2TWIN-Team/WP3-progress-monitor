@@ -76,20 +76,32 @@ def check_schedule(activity_start_time, activity_end_time, operation_start_time,
     tuple
         Progress status [ahead, behind, on], number of days ahead/behind (-1 if not started), if completed 1 else 0
     """
-    if activity_progress == 100:
+    if activity_progress == 100:  # task complete
         if activity_end_time > operation_end_time:
             combined_status = 'ahead', (activity_end_time - operation_end_time).days, 1
         elif activity_end_time < operation_end_time:
             combined_status = 'behind', (operation_end_time - activity_end_time).days, 1
         else:
             combined_status = 'on', 0, 1
-    else:
+
+    elif activity_progress == 0:  # task not started
         if activity_start_time > operation_start_time:
             combined_status = 'on', -1, 0
         elif activity_start_time < operation_start_time:
             combined_status = 'behind', (operation_end_time - activity_end_time).days, 0
         else:
             combined_status = 'on', -1, 0
+
+    elif activity_progress in [33, 66]:  # progress at 30, 66 percentage (rebar, form work)
+        if activity_end_time > operation_end_time:
+            combined_status = 'ahead', (activity_end_time - operation_end_time).days, 1
+        elif activity_end_time < operation_end_time:
+            combined_status = 'behind', (operation_end_time - activity_end_time).days, 1
+        else:
+            combined_status = 'on', 0, 1
+
+    else:
+        raise Exception(f"{activity_progress} cannot be mapped!")
 
     return combined_status
 
@@ -122,7 +134,10 @@ class ProgressMonitor:
         str
             The progress of the node
         """
-        return node['items'][0][self.DTP_CONFIG.get_ontology_uri('progress')]
+        if self.DTP_CONFIG.get_ontology_uri('progress') in node['items'][0]:
+            return node['items'][0][self.DTP_CONFIG.get_ontology_uri('progress')]
+        else:  # no progress recorded
+            return 0
 
     def get_time(self, node, as_planned):
         """
