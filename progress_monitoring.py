@@ -46,11 +46,14 @@ def get_num_days(each_activity_tracker, computed_status):
     int
         Number of days an activity is behind/ahead
     """
-    num_days_list = []
-    for idx, status in enumerate(each_activity_tracker['status']):
-        if status == computed_status:
-            num_days_list.append(each_activity_tracker['days'][idx])
-    return max(num_days_list)
+    if isinstance(each_activity_tracker['days'], list):  # operation has many actions
+        num_days_list = []
+        for idx, status in enumerate(each_activity_tracker['status']):
+            if status == computed_status:
+                num_days_list.append(each_activity_tracker['days'][idx])
+        return max(num_days_list)
+    else:  # no actions for operation
+        return each_activity_tracker['days']
 
 
 def check_schedule(activity_start_time, activity_end_time, operation_start_time, operation_end_time,
@@ -104,6 +107,29 @@ def check_schedule(activity_start_time, activity_end_time, operation_start_time,
         raise Exception(f"{activity_progress} cannot be mapped!")
 
     return combined_status
+
+
+def calculate_projection(activity_tracker, activity_iri):
+    """
+    Calculate projected finishing days for a delayed operation
+
+    if operation started
+    projected day = (number of tasks completed in the activity / number of days taken to complete tasks in the activity)
+                    x (number of planned days + number of delayed days)
+    else
+    projected day = number of planned days + number of delayed days
+    """
+    days = activity_tracker[activity_iri]['days']  # number of delay/ ahead days
+    days_planned = activity_tracker[activity_iri]['planned_days']  # planned days for an activity
+    days_taken = activity_tracker[activity_iri]['perf_days']  # days taken for num_completed
+    if days_taken:  # operation started
+        num_completed = sum(activity_tracker[activity_iri]['complete'])  # number of tasks completed
+        total_days = days_planned + get_num_days(activity_tracker[activity_iri], 'behind')
+        projected_days = (num_completed // days_taken) * total_days
+    else:  # operation not started
+        projected_days = days_planned + days
+
+    return projected_days
 
 
 class ProgressMonitor:
@@ -236,16 +262,19 @@ class ProgressMonitor:
         progress_at_activity: dict
             Dictionary to store progress
         """
-        num_complete_task = len(activity_tracker[activity_iri]['complete'])
-        if num_complete_task:
-            computed_complete = sum(activity_tracker[activity_iri]['complete']) / num_complete_task * 100
-            computed_status = activity_status(activity_tracker[activity_iri]['status'])
-            computed_num_days = get_num_days(activity_tracker[activity_iri], computed_status)
-            progress_at_activity[activity_iri] = {'complete': computed_complete,
-                                                  'status': computed_status,
-                                                  'days': computed_num_days}
-        else:  # none of the actions are complete
-            progress_at_activity[activity_iri] = {'complete': 0.0, 'status': 'behind', 'days': -1}
+        num_task = len(activity_tracker[activity_iri]['complete'])
+        computed_complete = sum(activity_tracker[activity_iri]['complete']) / num_task * 100
+        computed_status = activity_status(activity_tracker[activity_iri]['status'])
+        computed_num_days = get_num_days(activity_tracker[activity_iri], computed_status)
+
+        progress_at_activity[activity_iri] = {'complete': computed_complete,
+                                              'status': computed_status,
+                                              'days': computed_num_days}
+
+        # only project dates for delayed operation that are not completed
+        if computed_status == "behind" and computed_complete != 100:
+            projected_days = calculate_projection(activity_tracker, activity_iri)
+            progress_at_activity[activity_iri]['projection'] = projected_days
 
     def compute_progress_at_activity(self, activities=None):
         """
@@ -271,9 +300,12 @@ class ProgressMonitor:
 
         print("Started progress monitering...")
         for each_activity in tqdm(activities['items']):
-            activity_tracker[each_activity['_iri']] = {'complete': [], 'status': [], 'days': []}
+            activity_tracker[each_activity['_iri']] = {'complete': [], 'status': [], 'days': [], 'planned_days': 0,
+                                                       'perf_days': 0}
             operation_resp = self.__get_as_performed_op_node(each_activity)
             activity_start_time, activity_end_time = self.get_time(each_activity, as_planned=True)
+            planned_days = (activity_end_time - activity_start_time).days
+            activity_tracker[each_activity['_iri']]['planned_days'] = planned_days
 
             if not operation_resp['size']:  # if activity node doesn't have an operation node
                 activity_tracker[each_activity['_iri']]['complete'].append(0)
@@ -284,12 +316,14 @@ class ProgressMonitor:
                 else:
                     activity_tracker[each_activity['_iri']]['status'].append('on')
                     day_diff = (activity_start_time - latest_scan_date).days
-                activity_tracker[each_activity['_iri']]['days'].append(day_diff)
+                activity_tracker[each_activity['_iri']]['days'] = day_diff
                 self.compute_progress(activity_tracker, each_activity['_iri'], progress_at_activity)
                 continue
 
             operation = operation_resp['items'][0]
             operation_start_time, operation_end_time = self.get_time(operation, as_planned=False)
+            perf_days = (operation_end_time - operation_start_time).days
+            activity_tracker[each_activity['_iri']]['perf_days'] = perf_days
 
             tasks = self.DTP_API.query_all_pages(self.DTP_API.fetch_activity_connected_task_nodes,
                                                  each_activity['_iri'])
@@ -303,6 +337,7 @@ class ProgressMonitor:
                 time_status, days, task_complete_flag = check_schedule(activity_start_time, activity_end_time,
                                                                        operation_start_time, operation_end_time,
                                                                        as_performed_status)
+
                 activity_tracker[each_activity['_iri']]['complete'].append(task_complete_flag)
                 activity_tracker[each_activity['_iri']]['days'].append(days)
                 activity_tracker[each_activity['_iri']]['status'].append(time_status)
