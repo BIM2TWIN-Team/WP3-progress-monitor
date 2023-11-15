@@ -130,6 +130,50 @@ def calculate_projection(activity_tracker, activity_iri):
     return projected_days
 
 
+def get_as_pref_iri_from_as_planned(as_planned_iri):
+    """
+    Get as-built iri from as-designed iri
+    Parameters
+    ----------
+    as_planned_iri: str
+        As-designed iri
+    Returns
+    -------
+    str
+        As-built iri
+    """
+    # TODO: Currently the graph as wrong as-built iri. Once its fixed this function need to be corrected accordingly
+    return as_planned_iri.replace('ifc', 'as_builtifc') + '_1'
+
+
+def compute_progress(activity_tracker, activity_iri, progress_at_activity):
+    """
+    Compute progress of each activity
+
+    Parameters
+    ----------
+    activity_tracker: dict
+        Store progress info of each activity
+    activity_iri: str
+        IRI of activity node
+    progress_at_activity: dict
+        Dictionary to store progress
+    """
+    num_task = len(activity_tracker[activity_iri]['complete'])
+    computed_complete = sum(activity_tracker[activity_iri]['complete']) / num_task * 100
+    computed_status = activity_status(activity_tracker[activity_iri]['status'])
+    computed_num_days = get_num_days(activity_tracker[activity_iri], computed_status)
+
+    progress_at_activity[activity_iri] = {'complete': computed_complete,
+                                          'status': computed_status,
+                                          'days': computed_num_days}
+
+    # only project dates for delayed operation that are not completed
+    if computed_status == "behind" and computed_complete != 100:
+        projected_days = calculate_projection(activity_tracker, activity_iri)
+        progress_at_activity[activity_iri]['projection'] = projected_days
+
+
 class ProgressMonitor:
 
     def __init__(self, dtp_config, dtp_api):
@@ -181,7 +225,20 @@ class ProgressMonitor:
         else:  # no progress recorded
             return 0
 
-    def get_scan_date(self, sub_graph):
+    def get_last_scan_date(self, sub_graph):
+        """
+        Get last scan date
+
+        Parameters
+        ----------
+        sub_graph: dict
+            subgraph fetched
+
+        Returns
+        -------
+        datetime
+            Returns the latest scan date
+        """
         last_scan_date = datetime(1, 1, 1)
         for nodes in sub_graph:
             if nodes['asPerformed']:
@@ -191,54 +248,45 @@ class ProgressMonitor:
                     last_scan_date = max(as_perf_date, last_scan_date)
         return last_scan_date
 
-    def get_op_date(self, as_perf_nodes, activity_start_time):
-        last_scan_date = activity_start_time
+    def get_op_date(self, as_perf_nodes, activity_start_date):
+        """
+        Get operation date
+
+        Parameters
+        ----------
+        as_perf_nodes: list
+            as-built nodes
+        activity_start_date: datetime
+            activity start date
+        Returns
+        -------
+        datetime
+            Returns the operation date
+        """
+        last_scan_date = activity_start_date
         for as_perf_node in as_perf_nodes:
             as_perf_date = as_perf_node[self.DTP_CONFIG.get_ontology_uri('timeStamp')]
             last_scan_date = max(convert_str_dtp_format_datetime(as_perf_date), last_scan_date)
         return last_scan_date
 
-    def get_as_pref_from_as_planned(self, as_planned_iri):
-        # correct this later
-        return as_planned_iri.replace('ifc', 'as_builtifc') + '_1'
-
-    def compute_progress(self, activity_tracker, activity_iri, progress_at_activity):
-        """
-        Compute progress of each activity
-
-        Parameters
-        ----------
-        activity_tracker: dict
-            Store progress info of each activity
-        activity_iri: str
-            IRI of activity node
-        progress_at_activity: dict
-            Dictionary to store progress
-        """
-        num_task = len(activity_tracker[activity_iri]['complete'])
-        computed_complete = sum(activity_tracker[activity_iri]['complete']) / num_task * 100
-        computed_status = activity_status(activity_tracker[activity_iri]['status'])
-        computed_num_days = get_num_days(activity_tracker[activity_iri], computed_status)
-
-        progress_at_activity[activity_iri] = {'complete': computed_complete,
-                                              'status': computed_status,
-                                              'days': computed_num_days}
-
-        # only project dates for delayed operation that are not completed
-        if computed_status == "behind" and computed_complete != 100:
-            projected_days = calculate_projection(activity_tracker, activity_iri)
-            progress_at_activity[activity_iri]['projection'] = projected_days
-
     def compute_progress_at_activity(self):
+        """
+        Compute progress at activity level
+
+        Returns
+        -------
+        dict
+            Dictionary contains the percentage of tasks finished, ahead/behind/on schedule and how many days for each
+            activity
+        """
         activity_tracker = dict()
         progress_at_activity = dict()
         sub_graph = self.DTP_API.fetch_subgraph()["value"]
-        latest_scan_date = self.get_scan_date(sub_graph)
+        latest_scan_date = self.get_last_scan_date(sub_graph)
         assert latest_scan_date != datetime(1, 1, 1), "No scan date found!"
 
         for activity_set in sub_graph:
             activity, as_planned, as_perf = activity_set['act'], activity_set['elements'], activity_set['asPerformed']
-            as_planned_iris = [each_planned['_iri'] for each_planned in as_planned]
             as_perf_iris = [each_perf['_iri'] for each_perf in as_perf]
             activity_iri = activity['_iri']
             activity_tracker[activity_iri] = {'complete': [], 'status': [], 'days': [], 'planned_days': 0,
@@ -259,7 +307,7 @@ class ProgressMonitor:
                     activity_tracker[activity_iri]['status'].append('on')
                     day_diff = (activity_start_time - latest_scan_date).days
                 activity_tracker[activity_iri]['days'] = day_diff
-                self.compute_progress(activity_tracker, activity_iri, progress_at_activity)
+                compute_progress(activity_tracker, activity_iri, progress_at_activity)
                 continue
 
             operation_end_time, operation_start_time = self.get_op_date(as_perf,
@@ -267,11 +315,13 @@ class ProgressMonitor:
             perf_days = (operation_end_time - activity_start_time).days
             activity_tracker[activity_iri]['perf_days'] = perf_days
 
+            # no as-built elements
             if not as_perf:
                 continue
 
             for each_as_planned in as_planned:
-                as_pref_iri = self.get_as_pref_from_as_planned(each_as_planned['_iri'])
+                as_pref_iri = get_as_pref_iri_from_as_planned(each_as_planned['_iri'])
+                # as-planned element doesnt have corresponding as-built element
                 if as_pref_iri not in as_perf_iris:
                     continue
 
@@ -284,7 +334,7 @@ class ProgressMonitor:
                 activity_tracker[activity_iri]['days'].append(days)
                 activity_tracker[activity_iri]['status'].append(time_status)
 
-            self.compute_progress(activity_tracker, activity_iri, progress_at_activity)
+            compute_progress(activity_tracker, activity_iri, progress_at_activity)
 
         return progress_at_activity
 
