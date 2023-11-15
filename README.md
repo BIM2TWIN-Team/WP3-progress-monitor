@@ -31,6 +31,13 @@ This script run progress monitering at activity level with DTP.
 python3 progress_monitoring.py
 ```
 
+The above script take around 1 min to fetch all nodes from the node, thus the below script include faster (1-2 secs)
+fetching and progress monitoring calculations.
+
+```shell
+python3 progress_monitoring_v2.py
+```
+
 ## Delete as-performed node
 
 > **Warning**

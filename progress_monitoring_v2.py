@@ -117,6 +117,7 @@ def calculate_projection(activity_tracker, activity_iri):
     else
     projected day = number of planned days + number of delayed days
     """
+    # TODO: Projection function should be changed to S-shaped function
     days = activity_tracker[activity_iri]['days']  # number of delay/ ahead days
     days_planned = activity_tracker[activity_iri]['planned_days']  # planned days for an activity
     days_taken = activity_tracker[activity_iri]['perf_days']  # days taken for num_completed
@@ -142,7 +143,7 @@ def get_as_pref_iri_from_as_planned(as_planned_iri):
     str
         As-built iri
     """
-    # TODO: Currently the graph as wrong as-built iri. Once its fixed this function need to be corrected accordingly
+    # TODO: Currently the graph has wrong as-built iri. Once its fixed this function need to be corrected accordingly
     return as_planned_iri.replace('ifc', 'as_builtifc') + '_1'
 
 
