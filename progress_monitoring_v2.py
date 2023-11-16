@@ -8,7 +8,7 @@ from datetime import datetime
 
 from DTP_API.DTP_API import DTPApi
 from DTP_API.DTP_config import DTPConfig
-from DTP_API.helpers import convert_str_dtp_format_datetime
+from DTP_API.helpers import get_timestamp_dtp_format, convert_str_dtp_format_datetime
 
 
 def activity_status(time_list):
@@ -189,7 +189,7 @@ class ProgressMonitor:
         self.DTP_API = dtp_api
         self.progress_at_activity = dict()
 
-    def get_time(self, node):
+    def get_time(self, node, as_planned):
         """
         Get start and end time of a node
 
@@ -197,14 +197,29 @@ class ProgressMonitor:
         ----------
         node: dict
             directory with node information
-
+        as_planned: bool
+            if true get time for as-planned node else as-performed
         Returns
         -------
         tuple
             Start and end date of the node
         """
-        start_time = node[self.DTP_CONFIG.get_ontology_uri('plannedStart')]
-        end_time = node[self.DTP_CONFIG.get_ontology_uri('plannedEnd')]
+        uri_str = 'planned' if as_planned else 'process'
+        start_time = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'Start')]
+        try:
+            if self.DTP_CONFIG.get_ontology_uri(uri_str + 'End') in node:
+                end_time = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'End')]
+            elif self.DTP_CONFIG.get_ontology_uri(uri_str + 'End') in node \
+                    and self.DTP_CONFIG.get_ontology_uri('lastUpdatedOn') in node:
+                end_time_op = node[self.DTP_CONFIG.get_ontology_uri(uri_str + 'End')]
+                last_update = node[self.DTP_CONFIG.get_ontology_uri('lastUpdatedOn')]
+                end_time = get_timestamp_dtp_format(
+                    max(convert_str_dtp_format_datetime(end_time_op),
+                        convert_str_dtp_format_datetime(last_update)))
+            else:
+                end_time = node[self.DTP_CONFIG.get_ontology_uri('lastUpdatedOn')]
+        except KeyError as err:
+            raise Exception(f"{err} for iri: {node['_iri']}")
         return datetime.fromisoformat(start_time), datetime.fromisoformat(end_time)
 
     def get_progress_from_as_performed_node(self, node):
@@ -292,7 +307,7 @@ class ProgressMonitor:
             activity_tracker[activity_iri] = {'complete': [], 'status': [], 'days': [], 'planned_days': 0,
                                               'perf_days': 0}
 
-            activity_start_time, activity_end_time = self.get_time(activity)
+            activity_start_time, activity_end_time = self.get_time(activity, as_planned=True)
             planned_days = (activity_end_time - activity_start_time).days
             activity_tracker[activity_iri]['planned_days'] = planned_days
 
