@@ -143,8 +143,7 @@ def get_as_pref_iri_from_as_planned(as_planned_iri):
     str
         As-built iri
     """
-    # TODO: Currently the graph has wrong as-built iri. Once its fixed this function need to be corrected accordingly
-    return as_planned_iri.replace('ifc', 'as_builtifc') + '_1'
+    return as_planned_iri.replace('ifc', 'as_built') + '_1'
 
 
 def compute_progress(activity_tracker, activity_iri, progress_at_activity):
