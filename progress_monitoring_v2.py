@@ -143,6 +143,7 @@ def get_as_pref_iri_from_as_planned(as_planned_iri):
     str
         As-built iri
     """
+    # this is a workaround to find as-perf iri from as-planned iri without using node relationship
     return as_planned_iri.replace('ifc', 'as_built') + '_1'
 
 
@@ -302,7 +303,11 @@ class ProgressMonitor:
 
         for activity_set in sub_graph:
             activity, as_planned, as_perf = activity_set['act'], activity_set['elements'], activity_set['asPerformed']
-            as_perf_iris = [each_perf['_iri'] for each_perf in as_perf]
+            as_perf_iris = []
+            as_perf_dict = dict()
+            for each_perf in as_perf:
+                as_perf_iris.append(each_perf['_iri'])
+                as_perf_dict[each_perf['_iri']] = each_perf
             activity_iri = activity['_iri']
             activity_tracker[activity_iri] = {'complete': [], 'status': [], 'days': [], 'planned_days': 0,
                                               'perf_days': 0}
@@ -330,17 +335,13 @@ class ProgressMonitor:
             perf_days = (operation_end_time - activity_start_time).days
             activity_tracker[activity_iri]['perf_days'] = perf_days
 
-            # no as-built elements
-            if not as_perf:
-                continue
-
             for each_as_planned in as_planned:
                 as_pref_iri = get_as_pref_iri_from_as_planned(each_as_planned['_iri'])
                 # as-planned element doesnt have corresponding as-built element
                 if as_pref_iri not in as_perf_iris:
                     continue
 
-                as_performed_status = self.get_progress_from_as_performed_node(as_pref_iri)
+                as_performed_status = self.get_progress_from_as_performed_node(as_perf_dict[as_pref_iri])
                 time_status, days, task_complete_flag = check_schedule(activity_start_time, activity_end_time,
                                                                        operation_start_time, operation_end_time,
                                                                        as_performed_status)
