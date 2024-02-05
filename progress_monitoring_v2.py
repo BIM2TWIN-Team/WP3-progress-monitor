@@ -107,7 +107,7 @@ def get_num_days(each_activity_tracker, computed_status):
         return each_activity_tracker['days']
 
 
-def calculate_projection(activity_tracker, activity_iri):
+def calculate_projection(activity_tracker, activity_iri, projection_type="scurve"):
     """
     Calculate projected finishing days for a delayed operation
 
@@ -122,9 +122,9 @@ def calculate_projection(activity_tracker, activity_iri):
     days_planned = activity_tracker[activity_iri]['planned_days']  # planned days for an activity
     days_taken = activity_tracker[activity_iri]['perf_days']  # days taken for num_completed
     if days_taken:  # operation started
-        num_completed = sum(activity_tracker[activity_iri]['complete'])  # number of tasks completed
-        total_days = days_planned + get_num_days(activity_tracker[activity_iri], 'behind')
-        projected_days = (num_completed // days_taken) * total_days
+        num_task = len(activity_tracker[activity_iri]['complete'])
+        num_completed_task = sum(activity_tracker[activity_iri]['complete'])  # number of tasks completed
+        projected_days = (days_taken // num_completed_task) * num_task
     else:  # operation not started
         projected_days = days_planned + days
 

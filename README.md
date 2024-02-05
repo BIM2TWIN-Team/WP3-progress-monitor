@@ -48,3 +48,14 @@ The below command will delete all `construction`, `operation` and `action` nodes
 ```shell
 python3 delete_asperformed.py --target_level 'all'
 ```
+
+## Output
+
+The result is visualized as a Gantt chart. The graphical representation utilizes two horizontal bars per activity, with
+a grey bar indicating the planned schedule and a colored bar representing the actual performance. Dark red signifies
+completed but delayed activities, while dark green denotes activities on schedule but still need to be completed. Light
+red indicates activities behind schedule and not initiated, and light green signifies on-schedule activities yet to
+commence. The overlaid text provides details such as activity name, progress status, days ahead/behind schedule, and
+projected completion time.
+
+![B2T progress monitor](assets/progress_gantt.png)
