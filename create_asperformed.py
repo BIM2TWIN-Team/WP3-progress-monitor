@@ -9,9 +9,9 @@ from datetime import datetime
 
 from tqdm import tqdm
 
-from DTP_API_DTC.DTP_API import DTPApi
-from DTP_API_DTC.DTP_config import DTPConfig
-from DTP_API_DTC.helpers import logger_global, get_timestamp_dtp_format, convert_str_dtp_format_datetime, \
+from DTP_API.DTP_API import DTPApi
+from DTP_API.DTP_config import DTPConfig
+from DTP_API.helpers import logger_global, get_timestamp_dtp_format, convert_str_dtp_format_datetime, \
     create_as_performed_iri
 
 
